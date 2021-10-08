@@ -2,6 +2,8 @@ use clap::Clap;
 use std::convert::{TryFrom, TryInto};
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 use actix_diesel::Database;
 use diesel::PgConnection;
@@ -17,6 +19,8 @@ mod configs;
 mod db_adapters;
 mod models;
 mod schema;
+
+embed_migrations!("../migrations");
 
 // Categories for logging
 const INDEXER_FOR_EXPLORER: &str = "indexer_for_explorer";
@@ -246,6 +250,7 @@ fn main() {
     // We establish connection as early as possible as an additional sanity check.
     // Indexer should fail if .env file with credentials is missing/wrong
     let pool = models::establish_connection();
+    embedded_migrations::run(&pool).unwrap();
 
     let mut env_filter = EnvFilter::new(
         "tokio_reactor=info,near=info,near=error,stats=info,telemetry=info,indexer=info,indexer_for_explorer=info,aggregated=info",
