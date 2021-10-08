@@ -2,9 +2,11 @@ use clap::Clap;
 use std::convert::{TryFrom, TryInto};
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 use actix_diesel::Database;
-use diesel::PgConnection;
+use diesel::{r2d2::ConnectionManager, PgConnection};
 use futures::{join, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -17,6 +19,8 @@ mod configs;
 mod db_adapters;
 mod models;
 mod schema;
+
+embed_migrations!("./migrations");
 
 // Categories for logging
 const INDEXER_FOR_EXPLORER: &str = "indexer_for_explorer";
@@ -242,6 +246,14 @@ fn main() {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
     openssl_probe::init_ssl_cert_env_vars();
+
+    // Embed database migrations and run them
+    let manager = ConnectionManager::<PgConnection>::new(models::get_database_credentials());
+    let pool = r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool.");
+    let conn = pool.get().unwrap();
+    embedded_migrations::run(&conn).unwrap();
 
     // We establish connection as early as possible as an additional sanity check.
     // Indexer should fail if .env file with credentials is missing/wrong
