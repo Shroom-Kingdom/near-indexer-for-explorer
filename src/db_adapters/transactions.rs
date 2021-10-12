@@ -1,6 +1,8 @@
 use actix_diesel::dsl::AsyncRunQueryDsl;
+use diesel::r2d2::ConnectionManager;
 use diesel::PgConnection;
 use futures::future::join_all;
+use r2d2::Pool;
 use tracing::error;
 
 use crate::models;
@@ -8,7 +10,7 @@ use crate::schema;
 
 /// Saves Transaction to database
 pub(crate) async fn store_transactions(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     shards: &[near_indexer::IndexerShard],
     block_hash: &str,
     block_timestamp: u64,

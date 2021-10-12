@@ -3,11 +3,12 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use actix::Addr;
-use actix_diesel::Database;
 use anyhow::Context;
 use bigdecimal::{BigDecimal, ToPrimitive};
 use chrono::NaiveDateTime;
+use diesel::r2d2::ConnectionManager;
 use diesel::PgConnection;
+use r2d2::Pool;
 use tracing::{error, info, warn};
 
 use near_indexer::near_primitives;
@@ -34,7 +35,7 @@ const RETRY_DURATION: Duration = Duration::from_secs(60 * 60 * 2);
 // The value is always computed for the last block in a day (UTC).
 pub(super) async fn run_circulating_supply_computation(
     view_client: Addr<near_client::ViewClientActor>,
-    pool: Database<PgConnection>,
+    pool: Pool<ConnectionManager<PgConnection>>,
 ) {
     // We perform actual computations 00:10 UTC each day to be sure that the data is finalized
     let mut day_to_compute = lockup::TRANSFERS_ENABLED
@@ -76,19 +77,19 @@ pub(super) async fn run_circulating_supply_computation(
 
 async fn check_and_collect_daily_circulating_supply(
     view_client: &Addr<near_client::ViewClientActor>,
-    pool: &Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     request_datetime: &Duration,
 ) -> anyhow::Result<Option<CirculatingSupply>> {
     let start_of_day = request_datetime.as_nanos()
         - request_datetime.as_nanos() % circulating_supply::DAY.as_nanos();
     let printable_date = NaiveDateTime::from_timestamp(request_datetime.as_secs() as i64, 0).date();
-    let block = blocks::get_latest_block_before_timestamp(&pool, start_of_day as u64).await?;
+    let block = blocks::get_latest_block_before_timestamp(pool, start_of_day as u64).await?;
     let block_timestamp = block
         .block_timestamp
         .to_u64()
         .context("`block_timestamp` expected to be u64")?;
 
-    match get_precomputed_circulating_supply_for_timestamp(&pool, block_timestamp).await {
+    match get_precomputed_circulating_supply_for_timestamp(pool, block_timestamp).await {
         Ok(None) => {
             info!(
                 target: crate::AGGREGATED,
@@ -96,8 +97,8 @@ async fn check_and_collect_daily_circulating_supply(
                 printable_date,
                 block_timestamp
             );
-            let supply = compute_circulating_supply_for_block(&pool, view_client, &block).await?;
-            add_circulating_supply(&pool, &supply).await;
+            let supply = compute_circulating_supply_for_block(pool, view_client, &block).await?;
+            add_circulating_supply(pool, &supply).await;
             info!(
                 target: crate::AGGREGATED,
                 "Circulating supply for {} (timestamp {}) is {}",
@@ -122,7 +123,7 @@ async fn check_and_collect_daily_circulating_supply(
 }
 
 async fn compute_circulating_supply_for_block(
-    pool: &Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     view_client: &Addr<near_client::ViewClientActor>,
     block: &models::Block,
 ) -> anyhow::Result<CirculatingSupply> {
@@ -138,7 +139,7 @@ async fn compute_circulating_supply_for_block(
         .context("`total_supply` expected to be u128")?;
 
     let lockup_account_ids =
-        accounts::get_lockup_account_ids_at_block_height(&pool, &block_height).await?;
+        accounts::get_lockup_account_ids_at_block_height(pool, &block_height).await?;
 
     let mut lockups_locked_tokens: u128 = 0;
     let mut unfinished_lockup_contracts_count: i32 = 0;

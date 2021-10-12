@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use actix_diesel::dsl::AsyncRunQueryDsl;
-use actix_diesel::Database;
 use bigdecimal::BigDecimal;
+use diesel::r2d2::ConnectionManager;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl};
 use futures::join;
+use r2d2::Pool;
 use tracing::{error, info};
 
 use near_indexer::near_primitives;
@@ -14,7 +14,7 @@ use crate::models;
 use crate::schema;
 
 pub(crate) async fn handle_access_keys(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     outcomes: &[near_indexer::IndexerExecutionOutcomeWithReceipt],
     block_height: near_primitives::types::BlockHeight,
 ) {

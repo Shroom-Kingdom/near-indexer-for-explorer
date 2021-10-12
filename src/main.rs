@@ -1,12 +1,12 @@
 use clap::Clap;
+use r2d2::Pool;
 use std::convert::{TryFrom, TryInto};
 #[macro_use]
 extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
-use actix_diesel::Database;
-use diesel::PgConnection;
+use diesel::{r2d2::ConnectionManager, PgConnection};
 use futures::{join, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -20,7 +20,7 @@ mod db_adapters;
 mod models;
 mod schema;
 
-embed_migrations!("../migrations");
+embed_migrations!("./migrations");
 
 // Categories for logging
 const INDEXER_FOR_EXPLORER: &str = "indexer_for_explorer";
@@ -30,7 +30,7 @@ const INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 const MAX_DELAY_TIME: std::time::Duration = std::time::Duration::from_secs(120);
 
 async fn handle_message(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     streamer_message: near_indexer::StreamerMessage,
     strict_mode: bool,
 ) {
@@ -46,7 +46,7 @@ async fn handle_message(
 
     // Transaction
     db_adapters::transactions::store_transactions(
-        &pool,
+        pool,
         &streamer_message.shards,
         &streamer_message.block.header.hash.to_string(),
         streamer_message.block.header.timestamp,
@@ -57,7 +57,7 @@ async fn handle_message(
     for shard in &streamer_message.shards {
         if let Some(chunk) = &shard.chunk {
             db_adapters::receipts::store_receipts(
-                &pool,
+                pool,
                 &chunk.receipts,
                 &streamer_message.block.header.hash.to_string(),
                 &chunk.header.chunk_hash,
@@ -70,7 +70,7 @@ async fn handle_message(
 
     // ExecutionOutcomes
     let execution_outcomes_future = db_adapters::execution_outcomes::store_execution_outcomes(
-        &pool,
+        pool,
         &streamer_message.shards,
         streamer_message.block.header.timestamp,
     );
@@ -121,7 +121,7 @@ async fn handle_message(
 
 async fn listen_blocks(
     stream: mpsc::Receiver<near_indexer::StreamerMessage>,
-    pool: Database<PgConnection>,
+    pool: Pool<ConnectionManager<PgConnection>>,
     concurrency: std::num::NonZeroU16,
     strict_mode: bool,
     stop_after_number_of_blocks: Option<std::num::NonZeroUsize>,
@@ -168,7 +168,7 @@ async fn listen_blocks(
 
 /// Takes `home_dir` and `RunArgs` to build proper IndexerConfig and returns it
 async fn construct_near_indexer_config(
-    pool: &Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     home_dir: std::path::PathBuf,
     args: configs::RunArgs,
 ) -> near_indexer::IndexerConfig {
@@ -249,8 +249,13 @@ fn main() {
 
     // We establish connection as early as possible as an additional sanity check.
     // Indexer should fail if .env file with credentials is missing/wrong
-    let pool = models::establish_connection();
-    embedded_migrations::run(&pool).unwrap();
+    let manager = models::establish_connection();
+    // let manager = ConnectionManager::<PgConnection>::new(DATABASE_URL.get().unwrap());
+    let pool = r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool.");
+    let conn = pool.get().unwrap();
+    embedded_migrations::run(&conn).unwrap();
 
     let mut env_filter = EnvFilter::new(
         "tokio_reactor=info,near=info,near=error,stats=info,telemetry=info,indexer=info,indexer_for_explorer=info,aggregated=info",

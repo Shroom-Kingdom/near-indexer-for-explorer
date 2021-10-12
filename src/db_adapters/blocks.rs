@@ -1,7 +1,7 @@
-use actix_diesel::dsl::AsyncRunQueryDsl;
-use anyhow::Context;
 use bigdecimal::{BigDecimal, ToPrimitive};
-use diesel::{ExpressionMethods, PgConnection, QueryDsl};
+use diesel::r2d2::ConnectionManager;
+use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use r2d2::Pool;
 use tracing::error;
 
 use near_indexer::near_primitives;
@@ -11,7 +11,7 @@ use crate::schema;
 
 /// Saves block to database
 pub(crate) async fn store_block(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     block: &near_primitives::views::BlockView,
 ) {
     let block_model = models::blocks::Block::from(block);
@@ -21,8 +21,7 @@ pub(crate) async fn store_block(
         match diesel::insert_into(schema::blocks::table)
             .values(block_model.clone())
             .on_conflict_do_nothing()
-            .execute_async(&pool)
-            .await
+            .execute(&pool.get().unwrap())
         {
             Ok(_) => break,
             Err(async_error) => {
@@ -44,25 +43,23 @@ pub(crate) async fn store_block(
 
 /// Gets the latest block's height from database
 pub(crate) async fn latest_block_height(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
 ) -> Result<Option<u64>, String> {
     Ok(schema::blocks::table
         .select((schema::blocks::dsl::block_height,))
         .order(schema::blocks::dsl::block_height.desc())
-        .get_optional_result_async::<(bigdecimal::BigDecimal,)>(&pool)
-        .await
+        .first::<(bigdecimal::BigDecimal,)>(&pool.get().unwrap())
+        .optional()
         .map_err(|err| format!("DB Error: {}", err))?
         .and_then(|(block_height,)| block_height.to_u64()))
 }
 
 pub(crate) async fn get_latest_block_before_timestamp(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     timestamp: u64,
 ) -> anyhow::Result<models::Block> {
     Ok(schema::blocks::table
         .filter(schema::blocks::dsl::block_timestamp.le(BigDecimal::from(timestamp)))
         .order(schema::blocks::dsl::block_timestamp.desc())
-        .first_async::<models::Block>(&pool)
-        .await
-        .context("DB Error")?)
+        .first(&pool.get().unwrap())?)
 }

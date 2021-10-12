@@ -7,7 +7,7 @@ use crate::schema;
 use diesel::pg::expression::array_comparison::any;
 
 pub(crate) async fn store_execution_outcomes(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     shards: &[near_indexer::IndexerShard],
     block_timestamp: u64,
 ) {
@@ -24,7 +24,7 @@ pub(crate) async fn store_execution_outcomes(
 
 /// Saves ExecutionOutcome to database and then saves ExecutionOutcomesReceipts
 pub async fn store_execution_outcomes_for_chunk(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     execution_outcomes: &[near_indexer::IndexerExecutionOutcomeWithReceipt],
     shard_id: near_indexer::near_primitives::types::ShardId,
     block_timestamp: u64,

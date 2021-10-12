@@ -5,9 +5,11 @@ use actix_diesel::dsl::AsyncRunQueryDsl;
 use actix_diesel::Database;
 use anyhow::Context;
 use bigdecimal::BigDecimal;
-use diesel::{BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl};
+use diesel::r2d2::ConnectionManager;
+use diesel::{BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use futures::join;
 
+use r2d2::Pool;
 use tracing::{error, info};
 
 use near_indexer::near_primitives;
@@ -288,7 +290,7 @@ pub(crate) async fn store_accounts_from_genesis(
 }
 
 pub(crate) async fn get_lockup_account_ids_at_block_height(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     block_height: &near_primitives::types::BlockHeight,
 ) -> anyhow::Result<Vec<near_primitives::types::AccountId>> {
     // Diesel does not support named joins
@@ -322,8 +324,7 @@ pub(crate) async fn get_lockup_account_ids_at_block_height(
                 .or(schema::aggregated__lockups::dsl::deletion_block_height
                     .ge(BigDecimal::from(*block_height))),
         )
-        .get_results_async::<String>(&pool)
-        .await
+        .load::<String>(&pool.get().unwrap())
         .with_context(|| format!(
                 "DB error while collecting lockup account ids for block_height {}",
                 block_height

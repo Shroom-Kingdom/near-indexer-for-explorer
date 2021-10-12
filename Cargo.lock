@@ -60,21 +60,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix-diesel"
-version = "0.3.1-alpha.0"
-source = "git+https://github.com/frol/actix-diesel?branch=actix-0.11-beta.2#7066a04ccce15b20940d926758837c99954765cc"
-dependencies = [
- "actix",
- "actix-rt",
- "derive_more",
- "diesel",
- "futures",
- "num_cpus",
- "once_cell",
- "r2d2",
-]
-
-[[package]]
 name = "actix-http"
 version = "3.0.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2041,7 +2026,6 @@ name = "indexer-explorer"
 version = "0.10.1"
 dependencies = [
  "actix",
- "actix-diesel",
  "actix-http",
  "actix-rt",
  "actix-tls",

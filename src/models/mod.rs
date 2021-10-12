@@ -1,6 +1,6 @@
 use std::env;
 
-use diesel::PgConnection;
+use diesel::{r2d2::ConnectionManager, PgConnection};
 use dotenv::dotenv;
 
 pub use access_keys::AccessKey;
@@ -36,7 +36,7 @@ pub(crate) fn get_database_credentials() -> String {
     env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file")
 }
 
-pub(crate) fn establish_connection() -> actix_diesel::Database<PgConnection> {
+pub(crate) fn establish_connection() -> ConnectionManager<PgConnection> {
     let database_url = get_database_credentials();
-    actix_diesel::Database::builder().open(&database_url)
+    ConnectionManager::<PgConnection>::new(&database_url)
 }

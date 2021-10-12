@@ -23,18 +23,20 @@ COPY rust-toolchain rust-toolchain
 RUN cargo fetch
 RUN cargo build --release
 
+RUN rm /app/src/*.rs
 COPY src src
 COPY diesel.toml diesel.toml
+COPY migrations migrations
 RUN cargo build --release
 
-FROM debian:bullseye-slim
+# FROM debian:bullseye-slim
 
-WORKDIR /app
+# WORKDIR /app
 
-RUN apt-get update && apt-get install -y curl libpq-dev jq
+# RUN apt-get update && apt-get install -y curl libpq-dev jq
 
-COPY --from=build /app/target/release/indexer-explorer /usr/bin/indexer-explorer
+# COPY --from=build /app/target/release/indexer-explorer /usr/bin/indexer-explorer
 
-COPY run.sh run.sh
+# COPY run.sh run.sh
 
-ENTRYPOINT [ "./run.sh" ]
+# ENTRYPOINT [ "./run.sh" ]

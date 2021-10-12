@@ -3,9 +3,11 @@ use std::convert::TryFrom;
 
 use actix_diesel::dsl::AsyncRunQueryDsl;
 use diesel::pg::expression::array_comparison::any;
+use diesel::r2d2::ConnectionManager;
 use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl};
 use futures::join;
 use num_traits::cast::FromPrimitive;
+use r2d2::Pool;
 use tracing::{error, warn};
 
 use crate::models;
@@ -13,7 +15,7 @@ use crate::schema;
 
 /// Saves receipts to database
 pub(crate) async fn store_receipts(
-    pool: &actix_diesel::Database<PgConnection>,
+    pool: &Pool<ConnectionManager<PgConnection>>,
     receipts: &[near_indexer::near_primitives::views::ReceiptView],
     block_hash: &str,
     chunk_hash: &near_indexer::near_primitives::hash::CryptoHash,
